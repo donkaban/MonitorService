@@ -9,6 +9,7 @@
 #include <chrono>
 #include <signal.h>
 #include <thread>
+#include <mutex>
 
 #include "logger.h"
 
@@ -29,42 +30,85 @@ struct atom
 
 #define LOGFILE "monitor.log"
 
+
 static logger L(LOGFILE);
 
 class pidMonitor
 {
 public:
     pidMonitor()  {}
-   ~pidMonitor() {}
+   ~pidMonitor()  {}
 
     void add(pid_t p,const atom &a) 
     {                                                   
-        L("[", p, "] add\n\ttimeout: ", a.timeout, "\n\tto_cmd : ", a.timeout_cmd, "\n\tne_cmd : ", a.noexist_cmd);
+        std::lock_guard<std::mutex> lock(locker);
+        L("[", p, "]\t add timeout: ", a.timeout, "; to_cmd : '", a.timeout_cmd, "'; ne_cmd : '", a.noexist_cmd, "'");
         atoms[p] = a;
     }  
     void del(pid_t p)               
     {
-        L("[", p,"] delete");
+        std::lock_guard<std::mutex> lock(locker);
+        L("[", p,"]\t delete");
         if(check(p)) atoms.erase(p);
     }
-    bool check(pid_t p)             {return atoms.find(p) != atoms.end();}
-    bool exist(pid_t p)             
-    {
-       return (kill(p, 0) == 0); 
-    }   
+    bool check(pid_t p)  {return atoms.find(p) != atoms.end();}
+    bool exist(pid_t p)  {return (kill(p, 0) == 0); } 
+
     void command(std::string cmd, pid_t p)
     {
         replace<std::string>(cmd,"%PID",std::to_string(p));
-        L("[",p,"] call command : '", cmd,"'");
-        if(!system(cmd.c_str())) L("bad result for call command : ", cmd);
+        L("[",p,"]\t call command : '", cmd,"'");
+        auto result = system(cmd.c_str());
+        L("[",p,"]\t result : '", result,"'");
     }
     void touch(pid_t p)
     {
-        if(check(p)) atoms[p].timestamp = atoms[p].timeout;
+        std::lock_guard<std::mutex> lock(locker);
+        if(check(p)) 
+        {    
+            L("[",p,"]\t touch" );
+            atoms[p].timestamp = atoms[p].timeout;
+        }
         else
-            L("err: touch not exist pid: ", p);
+              L("[",p,"]\t bad touch, not exist");
     }
-    
+    std::thread & run(int sleeptime = 500)
+    {
+        if(working) 
+        {
+            L("[!] try run running monitoring");
+            return thrUpdate;
+        }
+        working = true;
+        thrUpdate = std::thread([&]
+        {
+            std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
+            std::chrono::time_point<std::chrono::system_clock> current;
+            std::chrono::milliseconds dura(sleeptime);
+            while(working)
+            {
+                locker.lock();
+                    current = std::chrono::system_clock::now();
+                    std::chrono::duration<float> dt(current - start);
+                    update(dt.count());
+                    start = current;
+                locker.unlock();
+                std::this_thread::sleep_for(dura);
+            }    
+        });
+        return thrUpdate;
+    } 
+
+    void stop()
+    {
+        working = false;
+    }
+
+private:
+    std::mutex  locker;
+    bool working = false;
+    std::unordered_map<pid_t, atom> atoms;
+    std::thread thrUpdate;
     void update(float dt)
     {
         auto i = atoms.begin();
@@ -73,27 +117,26 @@ public:
             if(exist(i->first))
             {
                 i->second.timestamp-=dt;
+                std::cout << "timestamp : " << i->second.timestamp << std::endl;
                 if(i->second.timestamp < 0)
                 {
-                      L("[", i->first, "] timeout");
-                      command(i->second.timeout_cmd, i->first);
+                    L("[", i->first, "]\t timeout, kill from table");
+                    command(i->second.timeout_cmd, i->first);
+                    i = atoms.erase(i);
+
                 }
-                i++;    
+                else
+                    ++i;
             }
             else
             {
-                L("[", i->first, "] not exist, kill from table");
+                L("[", i->first, "]\t not exist, kill from table");
                 command(i->second.noexist_cmd, i->first);
                 i = atoms.erase(i);
             }   
         }   
 
     }
-
-
-private:
-    std::unordered_map<pid_t, atom> atoms;
-
 
 };
 

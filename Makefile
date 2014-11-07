@@ -1,7 +1,7 @@
 TARGET	= ./monitor
 
 SOURCES = main.cpp
-HEADERS = logger.h
+HEADERS = logger.h monitor.h
 
 ################################################################
 

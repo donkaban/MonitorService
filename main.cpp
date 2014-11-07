@@ -10,35 +10,29 @@
 #include <iostream>
 #include "monitor.h"
 
-
 #define PIDFILE "monitor.pid"
-#define LOGFILE "monitor.log"
-
-
-void pid_file(const std::string &filename)
-{
-    FILE* f;
-    f = fopen(filename.c_str(), "w+");
-    if(f)
-    {
-        fprintf(f, "%u", getpid());
-        fclose(f);
-    }
-}
-
-
 
 int main (int argc, char **argv) 
 {
-
-    L("try start demon"); 
-   
+  
     pidMonitor monitor;
 
     monitor.add(getpid(),{5.f,"kill -9 %PID","ls"});
+    monitor.add(9999,{5.f,"ls","ls"});
+    
+    monitor.run(100).detach();
+    
 
+    int i = 7777;
     while(true)
-        monitor.update(.01);
+    {
+
+        monitor.add(i++,{5.f,"ls","ls"});
+        usleep(50000);
+    }
+
+    
+       
 
 
     // pid_t pid = fork();
