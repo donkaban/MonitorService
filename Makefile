@@ -1,11 +1,11 @@
 TARGET	= ./monitor
 
 SOURCES = main.cpp
-HEADERS = logger.h monitor.h
+HEADERS = logger.h pidMonitor.h rawMonitor.h
 
 ################################################################
 
-CXX          = g++
+CXX          = g++-4.9
 CXX_FLAGS    = -c -Wall -Wextra -std=c++11  -O3 
 LINK_FLAGS   = -pthread
 LIBS         = 

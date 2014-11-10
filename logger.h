@@ -26,7 +26,7 @@ public:
    {
    		_file.close();
    } 
-    template<typename ... T> void operator()(T && ... args)
+    template<typename ... T> void print(T && ... args)
     {
         _prn(args...);
         _file << timestamp() << " " << _str.str();
@@ -36,9 +36,11 @@ public:
    
  	template<typename ... T> void fatal(T && ... args)
     {
-    	this(args...);
+    	print(args...);
     	exit(-1);
     }
+   
+
 
 private:
     std::stringstream _str;

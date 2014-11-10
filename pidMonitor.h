@@ -1,8 +1,9 @@
-#ifndef _MONITOR_H_
-#define _MONITOR_H_
+#ifndef _PID_MONITOR_H_
+#define _PID_MONITOR_H_
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string>
 #include <unordered_map>
@@ -28,55 +29,54 @@ struct atom
     {}    
 };
 
-#define LOGFILE "monitor.log"
-
-
-static logger L(LOGFILE);
+#define LOG L->print
 
 class pidMonitor
 {
 public:
-    pidMonitor()  {}
+    pidMonitor(logger * l) : L(l) {LOG("[",getpid(),"]\t create PID monitor");}
    ~pidMonitor()  {}
 
     void add(pid_t p,const atom &a) 
     {                                                   
         std::lock_guard<std::mutex> lock(locker);
-        L("[", p, "]\t add timeout: ", a.timeout, "; to_cmd : '", a.timeout_cmd, "'; ne_cmd : '", a.noexist_cmd, "'");
+        LOG("[", p, "]\t add; timeout: ", a.timeout, "; to_cmd : '", a.timeout_cmd, "'; ne_cmd : '", a.noexist_cmd, "'");
         atoms[p] = a;
     }  
     void del(pid_t p)               
     {
         std::lock_guard<std::mutex> lock(locker);
-        L("[", p,"]\t delete");
+        LOG("[", p,"]\t delete");
         if(check(p)) atoms.erase(p);
     }
     bool check(pid_t p)  {return atoms.find(p) != atoms.end();}
     bool exist(pid_t p)  {return (kill(p, 0) == 0); } 
 
-    void command(std::string cmd, pid_t p)
+    void command(const std::string &tag,std::string cmd, pid_t p)
     {
         replace<std::string>(cmd,"%PID",std::to_string(p));
-        L("[",p,"]\t call command : '", cmd,"'");
-        auto result = system(cmd.c_str());
-        L("[",p,"]\t result : '", result,"'");
+        LOG("[",p,"]\t ",tag,"; cmd: '", cmd,"'");
+        if(system(cmd.c_str()) != 0)   
+            LOG("[",p,"]\t ",tag,"; bad result from call");
     }
     void touch(pid_t p)
     {
         std::lock_guard<std::mutex> lock(locker);
         if(check(p)) 
         {    
-            L("[",p,"]\t touch" );
+           LOG("[",p,"]\t touch" );
             atoms[p].timestamp = atoms[p].timeout;
         }
         else
-              L("[",p,"]\t bad touch, not exist");
+             LOG("[",p,"]\t bad touch, not exist");
     }
-    std::thread & run(int sleeptime = 500)
+    std::thread & run(size_t sleeptime = 500)
     {
+        LOG("[",getpid(),"]\t run PID monitor");
+      
         if(working) 
         {
-            L("[!] try run running monitoring");
+           LOG("[!] try run running PID monitor");
             return thrUpdate;
         }
         working = true;
@@ -84,16 +84,14 @@ public:
         {
             std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
             std::chrono::time_point<std::chrono::system_clock> current;
-            std::chrono::milliseconds dura(sleeptime);
+            std::chrono::milliseconds pause(sleeptime);
             while(working)
             {
-                locker.lock();
                     current = std::chrono::system_clock::now();
                     std::chrono::duration<float> dt(current - start);
-                    update(dt.count());
                     start = current;
-                locker.unlock();
-                std::this_thread::sleep_for(dura);
+                    update(dt.count());
+                    std::this_thread::sleep_for(pause);
             }    
         });
         return thrUpdate;
@@ -105,23 +103,24 @@ public:
     }
 
 private:
+    logger * L;
     std::mutex  locker;
     bool working = false;
     std::unordered_map<pid_t, atom> atoms;
     std::thread thrUpdate;
+   
     void update(float dt)
     {
+        std::lock_guard<std::mutex> lock(locker);
         auto i = atoms.begin();
         while(i != atoms.end())
         {
             if(exist(i->first))
             {
                 i->second.timestamp-=dt;
-                std::cout << "timestamp : " << i->second.timestamp << std::endl;
                 if(i->second.timestamp < 0)
                 {
-                    L("[", i->first, "]\t timeout, kill from table");
-                    command(i->second.timeout_cmd, i->first);
+                    command("what: timeout",i->second.timeout_cmd, i->first);
                     i = atoms.erase(i);
 
                 }
@@ -130,8 +129,7 @@ private:
             }
             else
             {
-                L("[", i->first, "]\t not exist, kill from table");
-                command(i->second.noexist_cmd, i->first);
+                command("what: not exist",i->second.noexist_cmd, i->first);
                 i = atoms.erase(i);
             }   
         }   

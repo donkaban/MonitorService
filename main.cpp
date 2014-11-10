@@ -8,62 +8,48 @@
 #include <string.h>
 
 #include <iostream>
-#include "monitor.h"
+#include "pidMonitor.h"
+#include "rawMonitor.h"
 
 #define PIDFILE "monitor.pid"
+#define LOGFILE "monitor.log"
 
-int main (int argc, char **argv) 
+static logger L(LOGFILE);
+
+int main() 
 {
   
-    pidMonitor monitor;
+    pidMonitor pid_monitor(&L);
+    rawMonitor raw_monitor(&L);
 
-    monitor.add(getpid(),{5.f,"kill -9 %PID","ls"});
-    monitor.add(9999,{5.f,"ls","ls"});
-    
-    monitor.run(100).detach();
-    
+    pid_t pid;
 
-    int i = 7777;
-    while(true)
+    switch(pid = fork()) 
     {
+        case -1:
+            L.fatal("[error!]\t can't create fork");    
+        case  0:
+        {
+            L.print("[",getpid(),"]\t create child process");
+            umask(0);
+            pid_t sid = setsid();
+            if(sid < 0)  L.fatal("[error!]\t can't create sid");   
+            close(STDIN_FILENO);
+            close(STDOUT_FILENO);
+            close(STDERR_FILENO);
 
-        monitor.add(i++,{5.f,"ls","ls"});
-        usleep(50000);
+            if(open("/dev/null",O_RDONLY) == -1) L.fatal("[error!]\t can't touch /dev/null"); 
+
+            pid_monitor.add(getpid(),{5.f,"kill -9 %PID",""});
+            pid_monitor.add(9876,{5.f,"","echo delete %PID"});
+            pid_monitor.run(100).join();
+        }
+        default:
+        {
+             L.print("[",getpid(),"]\t done");
+        }
+
+
     }
-
-    
-       
-
-
-    // pid_t pid = fork();
-    // if(pid < 0) exit(EXIT_FAILURE);
-    // if(!pid)
-    // {
-    //     umask(0);
-
-    //     pid_t sid = setsid();
-    //     if(sid < 0) exit(EXIT_FAILURE);
-    //     close(STDIN_FILENO);
-    //     close(STDOUT_FILENO);
-    //     close(STDERR_FILENO);
-        
-    //     if(open("/dev/null",O_RDONLY) == -1) 
-    //         exit(-1);;
-        
-    //     pid_file("pid.nfo"); 
-    
-     
-    //     if ((chdir("/")) < 0) exit(EXIT_FAILURE);
-        
-    //     while(true)
-    //     {
-    //         process();    
-    //         usleep(20000);    
-            
-    //     }
-       
-       
-    // }
-    // else
-        return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
