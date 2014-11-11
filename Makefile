@@ -1,29 +1,39 @@
-TARGET	= ./monitor
+SERVICE	= ./monitor 
+TESTBIN = ./test
 
-SOURCES = main.cpp
-HEADERS = logger.h pidMonitor.h rawMonitor.h
+TST_SRC = test.cpp    
+SRV_SRC = main.cpp packet.cpp transport.cpp
+HEADERS = 
 
 ################################################################
 
 CXX          = g++-4.9
-CXX_FLAGS    = -c -Wall -Wextra -std=c++11  -O3 
+CXX_FLAGS    = -Wall -Wextra -std=c++11  -O3  
 LINK_FLAGS   = -pthread
 LIBS         = 
 
-OBJECTS=$(SOURCES:.cpp=.o)
+SRV_OBJ  	 = $(SRV_SRC:.cpp=.o)
+TST_OBJ      = $(TST_SRC:.cpp=.o)
 
-all: $(SOURCES) $(HEADERS) $(TARGET) Makefile
-	rm -f $(OBJECTS)
+all: $(SRV_SRC) $(TST_SRC) $(HEADERS) $(SERVICE) $(TESTBIN) Makefile
+	rm -f $(TST_OBJ)
+	rm -f $(SRV_OBJ)
 
-$(TARGET): $(OBJECTS) $(HEADERS)  Makefile
-	$(CXX) $(OBJECTS) $(LINK_FLAGS) $(LIBS) -o $@
+$(SERVICE): $(SRV_OBJ) $(HEADERS)  Makefile
+	$(CXX) $(SRV_OBJ) $(LINK_FLAGS) $(LIBS) -o $@
 
-.cpp.o: $(SOURCES)  $(HEADERS)
+$(TESTBIN): $(TST_OBJ) $(HEADERS)  Makefile
+	$(CXX) $(TST_OBJ) $(LINK_FLAGS) $(LIBS) -o $@	
+
+.cpp.o: $(SRV_SRC) $(TST_SRC) $(HEADERS)
 	$(CXX) $(CXX_FLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(TARGET)
-	rm -f $(OBJECTS)
+	rm -f $(SERVICE)
+	rm -f $(TESTBIN)
+	rm -f $(SRV_OBJ)
+	rm -f $(TST_OBJ)
+	rm -f *.log
 
 
 

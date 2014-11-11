@@ -1,6 +1,7 @@
 #ifndef _RAW_MONITOR_H_
 #define _RAW_MONITOR_H_
 
+#include <iostream>
 #include <unistd.h>
 #include "logger.h"
 
