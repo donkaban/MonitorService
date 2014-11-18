@@ -27,17 +27,26 @@ void test(pidMonitor & monitor)
 }
 
 
+using pack1 = packet<int,int,int,int,int>;
+using pack2 = packet<int,std::string,float,bool>;
+
+
 int main() 
 {
   
     pidMonitor pid_monitor(&L);
     rawMonitor raw_monitor(&L);
 
-    packet <int,int,int,int,int> p1(1,2,3,4,5);
-    packet <int, std::string, float> p2(42,"ololo",42.42);
+    pack1  p1(1,2,3,4,5);
+    pack2  p2(42,"ololo",42.42, true);
 
     std::cout << "packet 1 -> " << p1.get_msg() << "\n";
     std::cout << "packet 2 -> " << p2.get_msg() << "\n";
+
+    std::cout << "0: " << p2.get<0>() << " 1: "<< p2.get<1>()  << " 2: "<< p2.get<2>() << "\n";
+    p2.get<1>() = "12345!!!!";
+    std::cout << "0: " << p2.get<0>() << " 1: "<< p2.get<1>()  << " 2: "<< p2.get<2>() << "\n";
+
 
 
     // pid_t pid;
